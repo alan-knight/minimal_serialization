@@ -1,0 +1,5 @@
+name: minimal_serialization
+dependencies:
+  serialization: any
+  analyzer: any
+  code_transformers: any
