@@ -13,26 +13,31 @@ import "package:path/path.dart" as path;
 ///      transformers:
 ///        - minimal_serialization :
 ///          $include: lib/stuff.dart lib/more_stuff.dart
+///          format: <lists|maps> // If omitted, defaults to lists
 /// For each library 'foo' listed in the $include section this will
-/// generate a 'foo_serialization_rules.dart' library with serialization
-/// rules for those classes. You can use these like
+/// generate a 'foo\_serialization\_rules.dart' library with serialization
+/// rules for those classes. Depending on the value of format, those rules
+/// will generate the output as either lists (more efficient) or maps
+/// (easier to read for debugging.) You can use these like
 ///       import 'package:my_package/stuff_serialization_rules.dart' as foo;
 ///       ...
 ///       var serialization = new Serialization();
 ///       foo.rules.values.forEach(serialization.addRule);
-/// For an example, see package minimal_serialization_example
+/// For an example, see package minimal\_serialization\_example
 class MinimalSerializationTransformer extends Transformer {
+  BarbackSettings _settings;
 
   get allowedExtensions => ".dart";
 
-  MinimalSerializationTransformer.asPlugin();
+  MinimalSerializationTransformer.asPlugin(this._settings);
 
   apply(Transform t) {
     return t.readInputAsString(t.primaryInput.id).then((contents) {
         var lib = parseCompilationUnit(contents);
         var classes = lib.declarations.where((x) => x is ClassDeclaration);
         var rules = classes
-          .map((each) => new CustomRuleGenerator(each))
+          .map((each) => new CustomRuleGenerator(each,
+              _settings.configuration['format']))
           .toList();
         var fileName = path.withoutExtension(t.primaryInput.id.path);
         var newId =
@@ -60,7 +65,6 @@ ${rules.map((x) => x.rule).join("\n\n")}
         t.addOutput(new Asset.fromString(newId, text));
       });
   }
-
 }
 
 /// Generates serialization rules for a class.
@@ -68,32 +72,44 @@ ${rules.map((x) => x.rule).join("\n\n")}
 // cases similarly to BasicRule in package:serialization.
 class CustomRuleGenerator {
   ClassDeclaration declaration;
-  CustomRuleGenerator(this.declaration);
+  String _format;
+  List<String> publicFieldNames;
 
-  get targetName => declaration.name.name;
-  get ruleName => targetName + 'SerializationRule';
-
-  get publicFieldNames => declaration.members
+  CustomRuleGenerator(this.declaration, this._format) {
+    print("_format = $_format");
+    publicFieldNames = declaration.members
       .where((each) => each is FieldDeclaration)
       .expand((x) => x.fields.variables)
       .where((each) => !each.name.name.startsWith("_"))
-      .map((each) => each.name.name);
+      .map((each) => each.name.name)
+      .toList();
+  }
+
+  get listFormat => _format == null || _format == 'lists';
+  get collectionStart => listFormat ? '[' : '{';
+  get collectionEnd => listFormat ? ']' : '}';
+  nameInQuotes(field) => listFormat ? '' : "'$field' : ";
+  deref(field) => listFormat ? publicFieldNames.indexOf(field) : "'$field'";
+
+  get targetName => declaration.name.name;
+  get ruleName => targetName + 'SerializationRule';
 
   get header => '''
 class $ruleName extends CustomRule {
   bool appliesTo(instance, _) => instance.runtimeType == $targetName;
   create(state) => new $targetName();
-  getState(instance) => {
+  getState(instance) => $collectionStart
 ''';
 
   get fields => publicFieldNames
-      .map((field) => "    '$field' : instance.$field").join(",\n");
+      .map((field) => "    ${nameInQuotes(field)}instance.$field").join(",\n");
 
   get setFields => publicFieldNames
-      .map((field) => "    instance.$field = state['$field']").join(";\n");
+      .map((field) =>
+          "    instance.$field = state[${deref(field)}]").join(";\n");
 
-  get footer => '''};
-  void setState($targetName instance, Map state) {
+  get footer => '''$collectionEnd;
+  void setState($targetName instance, state) {
 $setFields;
   }
 }''';
