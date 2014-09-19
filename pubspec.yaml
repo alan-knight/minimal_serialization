@@ -1,5 +1,5 @@
 name: minimal_serialization
-version: 0.1.1
+version: 0.1.2
 author: Dart Team <misc@dartlang.org>
 description: A transformer for generating serialization rules in the serialization package.
 dependencies:

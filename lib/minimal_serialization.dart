@@ -76,7 +76,6 @@ class CustomRuleGenerator {
   List<String> publicFieldNames;
 
   CustomRuleGenerator(this.declaration, this._format) {
-    print("_format = $_format");
     publicFieldNames = declaration.members
       .where((each) => each is FieldDeclaration)
       .expand((x) => x.fields.variables)
