@@ -2,34 +2,53 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-library minimal_serialization_transformer;
+library serialization_transformer;
 
 import "package:barback/barback.dart";
 import "package:analyzer/analyzer.dart";
 import "package:path/path.dart" as path;
 
-/// A transformer for generating serialization rules. Usage is as follows.
+/// A transformer for generating [SerializationRule]s. Usage is as follows.
 /// In your pubpsec
 ///      transformers:
-///        - minimal_serialization :
+///        - serialization :
 ///          $include: lib/stuff.dart lib/more_stuff.dart
-///          format: <lists|maps> // If omitted, defaults to lists
+///          format: <lists|maps> 
 /// For each library 'foo' listed in the $include section this will
 /// generate a 'foo\_serialization\_rules.dart' library with serialization
-/// rules for those classes. Depending on the value of format, those rules
-/// will generate the output as either lists (more efficient) or maps
-/// (easier to read for debugging.) You can use these like
+/// rules for those classes.
+/// 
+/// The format option should be either 'lists' or 'maps'. If 
+/// lists, then the generated rule reads and writes lists of all
+/// fields where the values must all be present and are expected
+/// to be positional in alphabetical order. This is the more efficient
+/// format.
+/// If maps, then the generated rule reads and writes maps from field
+/// names to field values. This format is easier to debug.
+///
+///  You can use the generated rules by adding them to a [Serialization].
 ///       import 'package:my_package/stuff_serialization_rules.dart' as foo;
 ///       ...
 ///       var serialization = new Serialization();
 ///       foo.rules.values.forEach(serialization.addRule);
-/// For an example, see package minimal\_serialization\_example
-class MinimalSerializationTransformer extends Transformer {
+/// For an example, see the example directory in the serialization package.
+///
+/// Note that right now this is very limited. It can only handle classes
+/// with default constructors, will only serialize public fields, and
+/// does not handle inheritance.
+///
+/// The format option should be either 'lists' or 'maps'. If 
+/// lists, then the generated rule reads and writes lists of all
+/// fields where the values must all be present and are expected
+/// to be positional in alphabetical order.
+/// If maps, then the generated rule reads and writes maps from field
+/// names to field values. 
+class SerializationTransformer extends Transformer {
   BarbackSettings _settings;
 
   get allowedExtensions => ".dart";
 
-  MinimalSerializationTransformer.asPlugin(this._settings);
+  SerializationTransformer.asPlugin(this._settings);
 
   apply(Transform t) {
     return t.readInputAsString(t.primaryInput.id).then((contents) {
@@ -48,7 +67,7 @@ class MinimalSerializationTransformer extends Transformer {
         var fileNameInPackage = path.joinAll(path.split(id.path)..removeAt(0));
         var text = '''
 // Generated serialization rules. *** DO NOT EDIT ***
-// See package minimal_serialization.
+// See transformer.dart in package serialization.
 library ${path.basenameWithoutExtension(fileName)}_serialization_rules.dart;
 
 import "package:serialization/serialization.dart";
@@ -67,20 +86,21 @@ ${rules.map((x) => x.rule).join("\n\n")}
   }
 }
 
-/// Generates serialization rules for a class.
+/// Generates serialization rules for simple classes.
 // TODO(alanknight): Generalize to be able to to handle more complex
-// cases similarly to BasicRule in package:serialization.
-class CustomRuleGenerator {
+// cases similarly to BasicRule.
+class _CustomRuleGenerator {
   ClassDeclaration declaration;
   String _format;
   List<String> publicFieldNames;
 
-  CustomRuleGenerator(this.declaration, this._format) {
+  _CustomRuleGenerator(this.declaration, this._format) {
     publicFieldNames = declaration.members
       .where((each) => each is FieldDeclaration)
       .expand((x) => x.fields.variables)
       .where((each) => !each.name.name.startsWith("_"))
       .map((each) => each.name.name)
+      .sort((a, b) => a.name.compareTo(b.name))
       .toList();
   }
 
