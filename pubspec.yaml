@@ -1,10 +1,9 @@
 name: minimal_serialization
 version: 0.1.2
-author: Dart Team <misc@dartlang.org>
+author: Alan Knight <alanknight@google.com>
 description: A transformer for generating serialization rules in the serialization package.
 dependencies:
   serialization: '>=0.9.1 <0.11.0'
   analyzer: '>=0.21.1 <0.24.0'
   code_transformers: '>=0.2.0 <0.3.0'
 homepage: https://github.com/alan-knight/minimal_serialization
-documentation: http://www.dartdocs.org/documentation/minimal_serialization/latest
